@@ -1,10 +1,10 @@
 '''1. Напишите следующие функции:
-- Нахождение корней квадратного уравнения
-- Генерация csv файла с тремя случайными числами в каждой строке. 
++ Нахождение корней квадратного уравнения
++ Генерация csv файла с тремя случайными числами в каждой строке. 
 100-1000 строк.
-- Декоратор, запускающий функцию нахождения корней квадратного уравнения 
++ Декоратор, запускающий функцию нахождения корней квадратного уравнения 
 с каждой тройкой чисел из csv файла.
-- Декоратор, сохраняющий переданные параметры и результаты работы функции 
++ Декоратор, сохраняющий переданные параметры и результаты работы функции 
 в json файл.
 2. Соберите пакет с играми из тех файлов, что уже были созданы в рамках курса'''
 
@@ -12,100 +12,112 @@
 Далее создаем создаем два декоратора, которые будем запускать в виде
 множественного декорирования.
 Чтобы схема работала, создам словарь глобальной области видимости,
-буду дополнять его прогонами целевой функции, а в конце записать его в json'''
+буду дополнять его прогонами целевой функции, а в конце записать его в json
 
+Похоже, не так. Надо деко-инпут сделать внешним, в нем в цикле вызывать деко-оутпут,
+а в нем уже вызывать целевую функцию, а также все операции с выгрузкой в json ОДНОЙ строки.
+И без всяких глобальных списков.
 
+2,1,3      входная строка без решений
+1,-4,4      входная строка с одним решением
+2,5,-7      входная строка с "ровным" решением'''
 
-# def quadr_equ(a:int|float, b:int|float, c:int|float) \
-#             -> tuple[float, float] | float|None:
-#     '''Квадратное уравнение'''
-
-#     discr = b**2 - 4*a*c
-#     if discr > 0:
-#         return (-b + discr**0.5) / (2 * a), (-b - discr**0.5) / (2 * a)
-#     elif discr == 0:
-#         return -b / (2 * a)
-#     else:
-#         return None
-
-# print(quadr_equ(2, -3, -9))
-
-
-
-
-
-
-
+import csv
+import json
+import time
 from random import randint
+from typing import Callable
+from os import path
 
-def csv_file_gen(\
-trinity_cnt:int, min_num:int, max_num:int, file_name:str) -> None:
+INPUT_FILE = "quadr_equ_input.csv"
+OUTPUT_FILE = "quadr_equ_output.json"
+EQUATION_COUNT = 5
+
+
+def csv_file_gen(trinity_count:int, min_num:int, max_num:int, \
+                file_name:str) -> None:
     '''- Генерация csv файла с тремя случайными числами в каждой строке.'''
-
-    for _ in range(trinity_cnt):
-        num_1 = randint(min_num, max_num+1)
-        num_2 = randint(min_num, max_num+1)
-        num_3 = randint(min_num, max_num+1)
-        print(num_1, num_2, num_3)
-
-
-csv_file_gen(trinity_cnt=7, min_num=-20, max_num=20, \
-                file_name='')
+    with open(file_name, 'w', newline='', encoding='utf-8') as f_write:
+        csv_write = csv.writer(f_write, dialect='excel')
+        for _ in range(trinity_count):
+            num_1 = randint(min_num, max_num+1)
+            num_2 = randint(min_num, max_num+1)
+            num_3 = randint(min_num, max_num+1)
+            csv_write.writerow([num_1, num_2, num_3])
 
 
+def outer_input_deco(csv_file_name:str):
+    if not path.isfile(csv_file_name):
+        print("Отсутствует csv-файл входных данных, идёт создание...")
+        csv_file_gen(EQUATION_COUNT, -20, 20+1, csv_file_name)
+        print("...создание csv-файла входных данных завершено")
+    def input_deco(func: Callable):
+        def wrapper_inp(*args, **kwargs):
+            # print(f'(wrapper_inp1) Запуск функции {func.__name__} в {time.time()}')
+            # print('(wrapper_inp2)', csv_file_name)
+
+            with open(csv_file_name, 'r', newline='') as f:
+                csv_file = csv.reader(f)
+                for line in csv_file:
+                    arg_a = int(line[0])
+                    arg_b = int(line[1])
+                    arg_c = int(line[2])
+                    # print(f'Запуск функции "{func.__name__}"')
+                    result = func(arg_a, arg_b, arg_c, **kwargs)    # вот здесь её вызов
+                    # print(f'Результат функции "{func.__name__}": {result};  {arg_a=};  {arg_b=};  {arg_c=}\n')
+
+            # print(f'(wrapper_inp3) Завершение функции {func.__name__} в {time.time()}')
+            return result
+        # print('Возвращаем декоратор-INP')
+        return wrapper_inp
+    return input_deco
 
 
+def outer_output_deco(json_file_name:str):
+    def output_deco(func: Callable):
+        def wrapper_out(*args, **kwargs):
+            # print('   Старт враппера-OUT')
+            # print(f'   Запускаю  {func.__name__}  из враппера-OUT')
+            res = func(*args, **kwargs)
+
+            if path.isfile(json_file_name):
+                with open(json_file_name, 'r', encoding='utf-8') as f:
+                    my_dict = json.load(f)
+            else:
+                my_dict = {}
+            my_dict[f'{time.time()=}'] = (args[0], args[1], args[2], res)
+            with open(json_file_name, 'w', encoding='utf-8') as f:
+                json.dump(my_dict, f, indent=2, ensure_ascii=False)
+
+            # print(f'   Результат функции "{func.__name__}": {res};  {args[0]=};  {args[1]=};  {args[2]=}')
+            # print(f'   Завершение враппера-OUT')
+            return res
+        # print('Возвращаем декоратор-OUT')
+        return wrapper_out
+    return output_deco
 
 
-# from typing import Callable
-
-# def deco_a(func: Callable):
-#     def wrapper_a(*args, **kwargs):
-#         global tmp_list
-#         tmp_list.append(3)
-#         print(tmp_list)
-#         print('Старт декоратора A')
-#         print(f'Запускаю {func.__name__}')
-#         res = func(*args, **kwargs)
-#         print(f'Завершение декоратора A')
-#         return res
-#     print('Возвращаем декоратор A')
-#     return wrapper_a
-
-# def deco_b(func: Callable):
-#     def wrapper_b(*args, **kwargs):
-#         global tmp_list
-#         tmp_list.append(2)
-#         print(tmp_list)
-#         print('Старт декоратора B')
-#         print(f'Запускаю {func.__name__}')
-#         res = func(*args, **kwargs)
-#         print(f'Завершение декоратора B')
-#         return res
-#     print('Возвращаем декоратор B')
-#     return wrapper_b
-
-# tmp_list = [1]
-
-# @deco_b
-# @deco_a
-# def main():
-#     print('Старт основной функции')
-
-# main()
+# @deco_b     # следующим стартует опреление "более дальнего" от целевой функции декоратора
+# @deco_a     # сначала стартует опреление "ближнего" к целевой функции декоратора
+@outer_input_deco(INPUT_FILE)
+@outer_output_deco(OUTPUT_FILE)
+def quadr_equ(a:int|float=2, b:int|float=-3, c:int|float=-9) \
+            -> tuple[float, float] | float|None:
+    '''Квадратное уравнение'''
+    # print("      ", a,b,c)
+    discr = b**2 - 4*a*c
+    if a == 0:
+        return "wrong input"
+    elif discr > 0:
+        return (-b + discr**0.5) / (2 * a), (-b - discr**0.5) / (2 * a)
+    elif discr == 0:
+        return -b / (2 * a)
+    else:
+        return None
 
 
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    quadr_equ()     # параметры не передаю - этим занимаются декораторы
 
 
 
@@ -418,7 +430,6 @@ csv_file_gen(trinity_cnt=7, min_num=-20, max_num=20, \
 
 
 
-
 # '''До этого мы вкладывали одну функцию в другую для создания замыкания. Если мы
 # хотим передавать в декоратор дополнительные параметры, понадобится третий
 # уровень вложенности. Рассмотрим пример кода.'''
@@ -579,6 +590,17 @@ csv_file_gen(trinity_cnt=7, min_num=-20, max_num=20, \
 # print(f'{factorial(20) = }')
 # '''Как вы видите только первые вызовы запускают функцию. Повторный вызов с уже
 # передававшимся аргументом обрабатывается декоратором cache.'''
+
+
+
+
+# '''этот короткий кусочек кода - трехминутная задачка из лекции'''
+# import json
+# a = 'Hello world!'
+# b = {key: value for key, value in enumerate(a)}
+# c = json.dumps(b, indent=3, separators=('; ', '= '))
+# print(f'{type(b)=},   {b=}')
+# print(c)
 
 
 

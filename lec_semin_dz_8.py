@@ -51,7 +51,6 @@ def os_walk(dir_arg:str) -> None:
         json.dump(path_dict, f, ensure_ascii=False, indent=2)
 
 
-my_dir = os.getcwd() + '\package6'
-# my_dir = os.getcwd()    #+'\package6'
+my_dir = os.getcwd() + '\package6'      # папка которую будем обходить
 print(f'{my_dir = }')
 os_walk(my_dir)
